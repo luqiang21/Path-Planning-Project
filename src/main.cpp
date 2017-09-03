@@ -134,6 +134,7 @@ vector<double> getFrenet(double x, double y, double theta, vector<double> maps_x
 // Transform from Frenet s,d coordinates to Cartesian x,y
 vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y)
 {
+
 	int prev_wp = -1;
 
 	while(s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1) ))
@@ -157,6 +158,22 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 	return {x,y};
 
+}
+
+int getLaneNumber(double d){
+  // lane_number calculation
+  // from center line to the most right, lane 1, 2, 3.
+  int lane_num;
+
+  if(d < 4 && d > 0){
+    lane_num = 1;
+  }
+  else if(d < 8 && d > 4){
+    lane_num = 2;
+  }else if(d < 12 && d > 8){
+    lane_num = 3;
+  }
+  return lane_num;
 }
 
 int main() {
@@ -235,47 +252,129 @@ int main() {
 
           	json msgJson;
 
+
+
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
-
 
              double pos_x;
              double pos_y;
              double angle;
              int path_size = previous_path_x.size();
 
-             for(int i = 0; i < path_size; i++)
-             {
-                 next_x_vals.push_back(previous_path_x[i]);
-                 next_y_vals.push_back(previous_path_y[i]);
-             }
-
-             if(path_size == 0)
-             {
-                 pos_x = car_x;
-                 pos_y = car_y;
-                 angle = deg2rad(car_yaw);
-             }
-             else
-             {
-                 pos_x = previous_path_x[path_size-1];
-                 pos_y = previous_path_y[path_size-1];
-
-                 double pos_x2 = previous_path_x[path_size-2];
-                 double pos_y2 = previous_path_y[path_size-2];
-                 angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
-             }
-
-             double dist_inc = 0.5;
-             for(int i = 0; i < 50-path_size; i++)
-             {
-                 next_x_vals.push_back(pos_x+(dist_inc)*cos(angle+(i+1)*(pi()/100)));
-                 next_y_vals.push_back(pos_y+(dist_inc)*sin(angle+(i+1)*(pi()/100)));
-                 pos_x += (dist_inc)*cos(angle+(i+1)*(pi()/100));
-                 pos_y += (dist_inc)*sin(angle+(i+1)*(pi()/100));
-             }
+            //  for(int i = 0; i < path_size; i++)
+            //  {
+            //      next_x_vals.push_back(previous_path_x[i]);
+            //      next_y_vals.push_back(previous_path_y[i]);
+            //  }
 
 
+            if(path_size != 0)
+          {
+              next_x_vals.push_back(previous_path_x[path_size-2]);
+              next_y_vals.push_back(previous_path_y[path_size-2]);
+              next_x_vals.push_back(previous_path_x[path_size-1]);
+              next_y_vals.push_back(previous_path_y[path_size-1]);
+            }
+
+              if(path_size == 0)
+            {
+                pos_x = car_x;
+                pos_y = car_y;
+                angle = deg2rad(car_yaw);
+            }
+            else
+            {
+                pos_x = previous_path_x[path_size-1];
+                pos_y = previous_path_y[path_size-1];
+
+                double pos_x2 = previous_path_x[path_size-2];
+                double pos_y2 = previous_path_y[path_size-2];
+                angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
+            }
+
+             // // // keep on its current lane
+             // find out the front vehicle of the ego vehicle
+             cout << sensor_fusion << endl;
+            int car_lane_num = getLaneNumber(car_d);
+            cout << " my d is "<< car_d << "lane is " << car_lane_num << endl;
+
+            int lane_num;
+            int front_car_id = -1;
+            double front_car_dist, car_length = 4.5; // need to verify the length.
+            int front_car_lane;
+            double front_car_vx, front_car_vy;
+
+            for(int i = 0; i < sensor_fusion.size(); i++)
+            {
+                auto sensor_data  = sensor_fusion[i];
+                int id = sensor_data[0];
+                double x = sensor_data[1], y = sensor_data[2];
+                double vx = sensor_data[3], vy = sensor_data[4];
+                double s = sensor_data[5], d = sensor_data[6];
+
+                lane_num = getLaneNumber(d);
+
+                cout << id << "   " << lane_num << endl;
+                cout << "d " << d << endl;
+                if(lane_num == car_lane_num){
+                  double dist = distance(car_x, car_y, x, y) - car_length;
+
+                  if(front_car_id == -1 || dist < front_car_dist){
+                    front_car_id = id;
+                    front_car_dist = dist;
+                    front_car_lane = lane_num;
+                    front_car_vx = vx;
+                    front_car_vy = vy;
+                  }
+                }
+            }
+            cout << "the immediate front car of me is " << front_car_id << " lane " << front_car_lane<<" distance " << front_car_dist<< endl;
+
+             // obtain the closest way point.
+            //  pos_x = previous_path_x[path_size-1];
+            //  pos_y = previous_path_y[path_size-1];
+
+            //  int closet_way_point_idx = ClosestWaypoint(pos_x, pos_y, map_waypoints_x, map_waypoints_y);
+             //
+            //  double s = map_waypoints_s[closet_way_point_idx];
+            //  double d_x = map_waypoints_dx[closet_way_point_idx];
+            //  double d_y = map_waypoints_dy[closet_way_point_idx];
+             //
+            //  double d_magnitude = sqrt(d_x * d_x + d_y * d_y);
+            double s = car_s;
+            //  if( (d_magnitude - 2) <=
+            double dist_inc = 0.4; // distance increased in 1/50 seconds.
+
+            if(front_car_dist <= 2){
+              // set ego car's speed based on front car's speed using car following model.
+
+              double v = sqrt(front_car_vx*front_car_vx + front_car_vy*front_car_vy);
+              cout << "immediate front car's speed is " << v << endl;
+              dist_inc = v / 50;
+            }
+
+            for(int i = 0; i < 50 - 2; i++)
+            {
+                s += dist_inc;
+
+                auto x_y = getXY(s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+                // cout << x_y << endl;
+                double x = x_y[0];
+                double y = x_y[1];
+                next_x_vals.push_back(x);
+                next_y_vals.push_back(y);
+
+            }
+            cout << "hahaha"<< endl;
+
+
+
+            //  NextWaypoint(double x, double y, double theta, vector<double> maps_x, vector<double> maps_y)
+             // compute frenet coordinates by assuming a constant speed
+
+             // convert frenet coordinates to x, y
 
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
