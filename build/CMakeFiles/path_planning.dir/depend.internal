@@ -162,6 +162,7 @@ CMakeFiles/path_planning.dir/src/main.cpp.o
  /Users/LuQiang/Dropbox/Udacity_NanoDegrees/Self-Driving Car NanoDegree-----UDACITY/Term-3/Path-Planning-Project/src/Eigen-3.3/Eigen/src/plugins/MatrixCwiseUnaryOps.h
  /Users/LuQiang/Dropbox/Udacity_NanoDegrees/Self-Driving Car NanoDegree-----UDACITY/Term-3/Path-Planning-Project/src/json.hpp
  /Users/LuQiang/Dropbox/Udacity_NanoDegrees/Self-Driving Car NanoDegree-----UDACITY/Term-3/Path-Planning-Project/src/main.cpp
+ /Users/LuQiang/Dropbox/Udacity_NanoDegrees/Self-Driving Car NanoDegree-----UDACITY/Term-3/Path-Planning-Project/src/spline.h
  /usr/local/include/pthread-barrier.h
  /usr/local/include/uWS/Extensions.h
  /usr/local/include/uWS/Group.h

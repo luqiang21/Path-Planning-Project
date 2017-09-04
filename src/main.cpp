@@ -8,6 +8,7 @@
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
+#include "spline.h"
 
 using namespace std;
 
@@ -160,21 +161,21 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 }
 
-int getLaneNumber(double d){
-  // lane_number calculation
-  // from center line to the most right, lane 1, 2, 3.
-  int lane_num;
-
-  if(d < 4 && d > 0){
-    lane_num = 1;
-  }
-  else if(d < 8 && d > 4){
-    lane_num = 2;
-  }else if(d < 12 && d > 8){
-    lane_num = 3;
-  }
-  return lane_num;
-}
+// int getLaneNumber(double d){
+//   // lane_number calculation
+//   // from center line to the most right, lane 1, 2, 3.
+//   int lane_num;
+//
+//   if(d < 4 && d > 0){
+//     lane_num = 1;
+//   }
+//   else if(d < 8 && d > 4){
+//     lane_num = 2;
+//   }else if(d < 12 && d > 8){
+//     lane_num = 3;
+//   }
+//   return lane_num;
+// }
 
 int main() {
   uWS::Hub h;
@@ -212,14 +213,21 @@ int main() {
   	map_waypoints_dx.push_back(d_x);
   	map_waypoints_dy.push_back(d_y);
   }
+  // start on lane 1, the middle lane.
+  int lane = 1;
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  // set a reference target speed
+  double ref_vel = 49.5; // mph
+
+  h.onMessage([&ref_vel, &lane, &map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     //auto sdata = string(data).substr(0, length);
     //cout << sdata << endl;
+
+
     if (length && length > 2 && data[0] == '4' && data[1] == '2') {
 
       auto s = hasData(data);
@@ -252,163 +260,126 @@ int main() {
 
           	json msgJson;
 
-
+            int prev_size = previous_path_x.size();
 
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
 
-             double pos_x;
-             double pos_y;
-             double angle;
-             int path_size = previous_path_x.size();
-
-            //  for(int i = 0; i < path_size; i++)
-            //  {
-            //      next_x_vals.push_back(previous_path_x[i]);
-            //      next_y_vals.push_back(previous_path_y[i]);
-            //  }
-
-
-            if(path_size != 0)
-          {
-              next_x_vals.push_back(previous_path_x[path_size-2]);
-              next_y_vals.push_back(previous_path_y[path_size-2]);
-              next_x_vals.push_back(previous_path_x[path_size-1]);
-              next_y_vals.push_back(previous_path_y[path_size-1]);
-            }
-
-              if(path_size == 0)
-            {
-                pos_x = car_x;
-                pos_y = car_y;
-                angle = deg2rad(car_yaw);
-            }
-            else
-            {
-                pos_x = previous_path_x[path_size-1];
-                pos_y = previous_path_y[path_size-1];
-
-                double pos_x2 = previous_path_x[path_size-2];
-                double pos_y2 = previous_path_y[path_size-2];
-                angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
-            }
-
-             // // // keep on its current lane
-             // find out the front vehicle of the ego vehicle
-             cout << sensor_fusion << endl;
-            int car_lane_num = getLaneNumber(car_d);
-            cout << " my d is "<< car_d << "lane is " << car_lane_num << endl;
-
-            int lane_num = -1;
-            int front_car_id = -1;
-            double front_car_dist, car_length = 5.; // need to verify the length.
-            int front_car_lane = -1;
-            double front_car_vx, front_car_vy;
-
-            for(int i = 0; i < sensor_fusion.size(); i++)
-            {
-                auto sensor_data  = sensor_fusion[i];
-                int id = sensor_data[0];
-                double x = sensor_data[1], y = sensor_data[2];
-                double vx = sensor_data[3], vy = sensor_data[4];
-                double s = sensor_data[5], d = sensor_data[6];
-
-                lane_num = getLaneNumber(d);
-
-                cout << id << "   " << lane_num << endl;
-                cout << "d " << d << endl;
-                if(lane_num == car_lane_num){
-                  double dist = distance(car_x, car_y, x, y) - car_length;
-
-                  if(front_car_id == -1 || dist < front_car_dist){
-                    front_car_id = id;
-                    front_car_dist = dist;
-                    front_car_lane = lane_num;
-                    front_car_vx = vx;
-                    front_car_vy = vy;
-                  }
-                }
-            }
-            cout << "the immediate front car of me is " << front_car_id << " lane " << front_car_lane<<" distance " << front_car_dist<< endl;
-
-             // obtain the closest way point.
-            //  pos_x = previous_path_x[path_size-1];
-            //  pos_y = previous_path_y[path_size-1];
-
-            //  int closet_way_point_idx = ClosestWaypoint(pos_x, pos_y, map_waypoints_x, map_waypoints_y);
-             //
-            //  double s = map_waypoints_s[closet_way_point_idx];
-            //  double d_x = map_waypoints_dx[closet_way_point_idx];
-            //  double d_y = map_waypoints_dy[closet_way_point_idx];
-             //
-            //  double d_magnitude = sqrt(d_x * d_x + d_y * d_y);
-            double s = car_s;
-            //  if( (d_magnitude - 2) <=
-            double dist_inc = 0.4; // distance increased in 1/50 seconds.
-
-            // set ego car's speed based on front car's speed using car following model.
-
-            double front_car_v = sqrt(front_car_vx*front_car_vx + front_car_vy*front_car_vy);
-            front_car_v = front_car_v / 2.237; // convert mph to m/s
-
-            cout << "car speed is "<<car_speed <<endl;
-            cout << "immediate front car's speed is " << front_car_v << endl;
-            double safe_v = sqrt(front_car_v*front_car_v + 2*5*(front_car_dist - 5)); // safe minimum gap 2m
-            if(front_car_id == -1){
-              safe_v = 25.;
-            }
-
-            car_speed = car_speed / 2.237 ; // convert mph to m/s
-            if(car_speed > safe_v){
-              // if the ego car exceeds safe speed, set to safe speed.
-              dist_inc = safe_v / 50;
-              cout << "vehicle's speed is set to safe speed " << safe_v << endl;
-              cout << "dist_inc is " << dist_inc << endl;
-            }
-
-
-
-            double max_decel = 5.;
-            for(int i = 0; i < 50 - 2; i++)
-            {
-                if(car_speed > safe_v){
-                  car_speed -= max_decel * 1/50.;
-
-                }
-                if(car_speed > 25.){
-                  car_speed = 25;
-
-                }
-                if(car_speed < safe_v){
-                  car_speed = safe_v;
-                }
-                cout << "car speed " << car_speed << endl;
-                dist_inc = car_speed / 50.;
-                cout << "safe speed " << safe_v <<endl;
-                cout << "dist_inc "<< dist_inc <<endl;
-
-                s += dist_inc;
-
-                auto x_y = getXY(s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-                // cout << x_y << endl;
-                double x = x_y[0];
-                double y = x_y[1];
-                next_x_vals.push_back(x);
-                next_y_vals.push_back(y);
-
-            }
-            cout << "hahaha"<< endl;
-
-
-
-            //  NextWaypoint(double x, double y, double theta, vector<double> maps_x, vector<double> maps_y)
-             // compute frenet coordinates by assuming a constant speed
-
-             // convert frenet coordinates to x, y
-
-
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+
+            // create a list of widely spaced (x, y) waypoints, evenly spaced at 30m
+            // later we will interpolate these waypoints with a spline and fill it
+            // with more points that control speed
+            vector<double> ptsx;
+            vector<double> ptsy;
+
+            // reference x, y, yaw states
+            // either we will reference the starting point as where the car is or at the previous paths and point
+            double ref_x = car_x;
+            double ref_y = car_y;
+            double ref_yaw = deg2rad(car_yaw);
+
+            // if previous size is almost empty use the car as starting point
+            if(prev_size < 2){
+              // use two points that make the path tangent to the car
+              double prev_car_x = car_x - cos(ref_yaw);
+              double prev_car_y = car_y - sin(ref_yaw);
+
+              ptsx.push_back(prev_car_x);
+              ptsx.push_back(car_x);
+              cout << prev_car_x << "    " << car_x << endl;
+              cout << prev_car_y << "    " << car_y << "  "<< sin(ref_yaw) << endl;
+              cout << ref_yaw << " " << prev_size<< endl;
+              ptsy.push_back(prev_car_y);
+              ptsy.push_back(car_y);
+            }
+            else{
+              // use the previous path's end point as starting reference
+              ref_x = previous_path_x[prev_size-1];
+              ref_y = previous_path_y[prev_size-1];
+
+              double ref_x_prev = previous_path_x[prev_size-2];
+              double ref_y_prev = previous_path_y[prev_size-2];
+              ref_yaw = atan2(ref_y-ref_y_prev, ref_x-ref_x_prev);
+
+              ptsx.push_back(ref_x_prev);
+              ptsx.push_back(ref_x);
+
+              ptsy.push_back(ref_y_prev);
+              ptsy.push_back(ref_y);
+
+            }
+
+            // In Frenet coordinates, add evenly 30m points ahead of the starting reference point
+            vector<double> next_wp0 = getXY(car_s+30, (2+4*lane), map_waypoints_s,map_waypoints_x,map_waypoints_y);
+            vector<double> next_wp1 = getXY(car_s+60, (2+4*lane), map_waypoints_s,map_waypoints_x,map_waypoints_y);
+            vector<double> next_wp2 = getXY(car_s+90, (2+4*lane), map_waypoints_s,map_waypoints_x,map_waypoints_y);
+
+            ptsx.push_back(next_wp0[0]);
+            ptsx.push_back(next_wp1[0]);
+            ptsx.push_back(next_wp2[0]);
+
+            ptsy.push_back(next_wp0[1]);
+            ptsy.push_back(next_wp1[1]);
+            ptsy.push_back(next_wp2[1]);
+
+            // totally we have five points in ptsx, ptsy
+
+            for(int i = 0; i < ptsx.size(); i++){
+              // shift car reference angle to 0 degrees
+              double shift_x = ptsx[i] - ref_x;
+              double shift_y = ptsy[i] - ref_y;
+
+              ptsx[i] = (shift_x * cos(0-ref_yaw) - shift_y * sin(0-ref_yaw));
+              ptsy[i] = (shift_y * sin(0-ref_yaw) + shift_y * cos(0-ref_yaw));
+            }
+
+            //create a spline
+            tk::spline s;
+
+            // set (x,y) points to the spline
+            s.set_points(ptsx, ptsy);
+
+            // start with all of the previous path points from last time
+            for(int i = 0; i < previous_path_y.size(); i++){
+              next_x_vals.push_back(previous_path_x[i]);
+              next_y_vals.push_back(previous_path_y[i]);
+            }
+
+            // calculate how to break up spline points so that we travel at our
+            // desired reference speed
+            double target_x = 30.0;
+            double target_y = s(target_x);
+            double target_dist = sqrt(target_x*target_x + target_y*target_y);
+
+            double x_add_on = 0; // we start at local coordinate 0.
+
+            // fill up the rest of our path planner after filling it with previous
+            // points
+            // double N = (target_dist / 0.02 / ref_vel / 2.237); // 2.237 to convert mph to m/s
+            // double delta_x = target_x / N;
+            for(int i = 1; i <= 50-previous_path_x.size(); i++){
+              double N = (target_dist / (.02*ref_vel) / 2.237);
+              double x_point = x_add_on + (target_x)/N;//delta_x;
+              double y_point = s(x_point);
+
+              x_add_on = x_point;
+
+              double x_ref = x_point;
+              double y_ref = y_point;
+
+              // rotate back to world coordinate
+              x_point = (x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw));
+              y_point = (x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw));
+
+              x_point += ref_x;
+              y_point += ref_y;
+
+              next_x_vals.push_back(x_point);
+              next_y_vals.push_back(y_point);
+
+            }
+
           	msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
 
