@@ -299,10 +299,10 @@ int main() {
             int car_lane_num = getLaneNumber(car_d);
             cout << " my d is "<< car_d << "lane is " << car_lane_num << endl;
 
-            int lane_num;
+            int lane_num = -1;
             int front_car_id = -1;
-            double front_car_dist, car_length = 4.5; // need to verify the length.
-            int front_car_lane;
+            double front_car_dist, car_length = 5.; // need to verify the length.
+            int front_car_lane = -1;
             double front_car_vx, front_car_vy;
 
             for(int i = 0; i < sensor_fusion.size(); i++)
@@ -346,16 +346,47 @@ int main() {
             //  if( (d_magnitude - 2) <=
             double dist_inc = 0.4; // distance increased in 1/50 seconds.
 
-            if(front_car_dist <= 2){
-              // set ego car's speed based on front car's speed using car following model.
+            // set ego car's speed based on front car's speed using car following model.
 
-              double v = sqrt(front_car_vx*front_car_vx + front_car_vy*front_car_vy);
-              cout << "immediate front car's speed is " << v << endl;
-              dist_inc = v / 50;
+            double front_car_v = sqrt(front_car_vx*front_car_vx + front_car_vy*front_car_vy);
+            front_car_v = front_car_v / 2.237; // convert mph to m/s
+
+            cout << "car speed is "<<car_speed <<endl;
+            cout << "immediate front car's speed is " << front_car_v << endl;
+            double safe_v = sqrt(front_car_v*front_car_v + 2*5*(front_car_dist - 5)); // safe minimum gap 2m
+            if(front_car_id == -1){
+              safe_v = 25.;
             }
 
+            car_speed = car_speed / 2.237 ; // convert mph to m/s
+            if(car_speed > safe_v){
+              // if the ego car exceeds safe speed, set to safe speed.
+              dist_inc = safe_v / 50;
+              cout << "vehicle's speed is set to safe speed " << safe_v << endl;
+              cout << "dist_inc is " << dist_inc << endl;
+            }
+
+
+
+            double max_decel = 5.;
             for(int i = 0; i < 50 - 2; i++)
             {
+                if(car_speed > safe_v){
+                  car_speed -= max_decel * 1/50.;
+
+                }
+                if(car_speed > 25.){
+                  car_speed = 25;
+
+                }
+                if(car_speed < safe_v){
+                  car_speed = safe_v;
+                }
+                cout << "car speed " << car_speed << endl;
+                dist_inc = car_speed / 50.;
+                cout << "safe speed " << safe_v <<endl;
+                cout << "dist_inc "<< dist_inc <<endl;
+
                 s += dist_inc;
 
                 auto x_y = getXY(s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
