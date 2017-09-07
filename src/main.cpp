@@ -217,7 +217,7 @@ int main() {
   int lane = 1;
 
   // set a reference target speed
-  double ref_vel = 49.5; // mph
+  double ref_vel = 0.;//49.5; // mph
 
   h.onMessage([&ref_vel, &lane, &map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
@@ -263,6 +263,51 @@ int main() {
 
 
             int prev_size = previous_path_x.size();
+
+            // sensor Fusion
+            // data in sensor_fusion [car's unique ID, car's x position in map coordinates,
+            // car's y position in map coordinates, car's x velocity in m/s,
+            // car's y velocity in m/s, car's s position in frenet coordinates,
+            // car's d position in frenet coordinates] i.e. [id, x, y, vx, vy, s, d]
+            if(prev_size > 0){
+              car_s = end_path_s;
+            }
+
+            bool too_close = false;
+
+            // find ref_v to use
+            for(int i = 0; i < sensor_fusion.size(); i ++){
+              vector<double> car_i_data = sensor_fusion[i];
+              // car is in my lane
+              float d = car_i_data[6];
+              if (d < (4*(lane+1)) && d > (4*lane)){
+                double vx = car_i_data[3];
+                double vy = car_i_data[4];
+                double check_speed = sqrt(vx*vx + vy*vy);
+                double check_car_s = car_i_data[5];
+
+                // if using previous value can project s value out
+                check_car_s += ((double)prev_size*.02*check_speed);
+                // check s value greater than mine and some gap
+                if ((check_car_s > car_s) && (check_car_s - car_s) < 30){
+
+                  // do some logic here
+                  // ref_vel = 29.5; // mph
+                  too_close = true;
+                  // lower speed or change lane.
+
+                }
+
+              }
+
+            }
+
+            if(too_close){
+              ref_vel -= .224; // decrease about 5m/s
+
+            }else if(ref_vel < 49.5){
+              ref_vel += .224;
+            }
 
             // create a list of widely spaced (x, y) waypoints, evenly spaced at 30m
             // later we will interpolate these waypoints with a spline and fill it
