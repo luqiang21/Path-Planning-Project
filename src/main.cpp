@@ -260,12 +260,9 @@ int main() {
 
           	json msgJson;
 
+
+
             int prev_size = previous_path_x.size();
-
-          	vector<double> next_x_vals;
-          	vector<double> next_y_vals;
-
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
 
             // create a list of widely spaced (x, y) waypoints, evenly spaced at 30m
             // later we will interpolate these waypoints with a spline and fill it
@@ -331,7 +328,7 @@ int main() {
               double shift_y = ptsy[i] - ref_y;
 
               ptsx[i] = (shift_x * cos(0-ref_yaw) - shift_y * sin(0-ref_yaw));
-              ptsy[i] = (shift_y * sin(0-ref_yaw) + shift_y * cos(0-ref_yaw));
+              ptsy[i] = (shift_x * sin(0-ref_yaw) + shift_y * cos(0-ref_yaw));
             }
 
             //create a spline
@@ -339,6 +336,9 @@ int main() {
 
             // set (x,y) points to the spline
             s.set_points(ptsx, ptsy);
+
+            vector<double> next_x_vals;
+          	vector<double> next_y_vals;
 
             // start with all of the previous path points from last time
             for(int i = 0; i < previous_path_y.size(); i++){
@@ -359,7 +359,7 @@ int main() {
             // double N = (target_dist / 0.02 / ref_vel / 2.237); // 2.237 to convert mph to m/s
             // double delta_x = target_x / N;
             for(int i = 1; i <= 50-previous_path_x.size(); i++){
-              double N = (target_dist / (.02*ref_vel) / 2.237);
+              double N = (target_dist / (.02*ref_vel) * 2.237);
               double x_point = x_add_on + (target_x)/N;//delta_x;
               double y_point = s(x_point);
 
