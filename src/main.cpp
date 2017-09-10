@@ -327,8 +327,22 @@ double compute_cost(vector<double> next_x_vals, vector<double> next_y_vals){
 
 
 int get_current_lane(double d){
-  return;
+  //lane_number calculation
+  // from center line to the most right, lane 1, 2, 3.
+  int lane_num;
+
+  if(d < 4 && d > 0){
+    lane_num = 0;
+  }
+  else if(d < 8 && d > 4){
+    lane_num = 1;
+  }
+  else if(d < 12 && d > 8){
+    lane_num = 2;
+  }
+  return lane_num;
 }
+
 
 int main() {
   uWS::Hub h;
@@ -426,6 +440,7 @@ int main() {
             }
 
             bool too_close = false;
+            lane = get_current_lane(car_d);
 
 
             // below are computed all for the end of previous path, not current time
@@ -511,7 +526,6 @@ int main() {
             double cost_lcl = 10000;
             double cost_lcr = 10000;
 
-            current_lane = get_current_lane(d);
 
             // behavior planner
             // we perform behavior planning if target_lane equals lane.
