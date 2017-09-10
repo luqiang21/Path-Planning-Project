@@ -9,6 +9,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
+#include <algorithm>    // std::min
 
 using namespace std;
 
@@ -307,9 +308,28 @@ vector<vector<double>> generate_path(bool too_close, int lane, json j,
 
 
 double compute_cost(vector<double> next_x_vals, vector<double> next_y_vals){
-  double cost = 1;
+  // compute cost of speed with speed limit
+  double cost = 0;
+
+  for(int i=1; i < next_x_vals.size(); i++){
+    double vx = (next_x_vals[i] - next_x_vals[i-1]) / 0.02;
+    double vy = (next_y_vals[i] - next_y_vals[i-1]) / 0.02;
+
+    double cost_i = 49.5 / 2.24 - sqrt(vx*vx + vy*vy);
+    cost += cost_i;
+
+  }
+  // normalize it over all speed 0
+  cost = cost / (next_x_vals.size() - 1) / (49.5 / 2.24);
+  cout << cost << endl;
   return cost;
 }
+
+
+int get_current_lane(double d){
+  return;
+}
+
 int main() {
   uWS::Hub h;
 
@@ -348,9 +368,10 @@ int main() {
   }
   // start on lane 1, the middle lane.
   int lane = 1;
+  int target_lane = lane;
 
 
-  h.onMessage([ &lane, &map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&lane, &target_lane, &map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -433,7 +454,6 @@ int main() {
 
               // if using previous value can project s value out
               check_car_s += ((double)prev_size*.02*check_speed);
-              sensor_fusion[i][5] = check_car_s; // update other car's s to future state
 
               double dist = check_car_s - car_s;
               // check my lane
@@ -456,7 +476,7 @@ int main() {
 
                 // compute left rear nearest car
                 if((dist < 0) && (-dist < left_rear_min_dist)){
-                  left_front_min_dist = dist;
+                  left_front_min_dist = -dist;
                   left_rear_nearest_car = i;
                 }
 
@@ -473,7 +493,7 @@ int main() {
 
                 // compute left rear nearest car
                 if((dist < 0) && (-dist < right_rear_min_dist)){
-                  right_front_min_dist = dist;
+                  right_front_min_dist = -dist;
                   right_rear_nearest_car = i;
                 }
 
@@ -486,85 +506,150 @@ int main() {
             vector<vector<double>> next_vals;
             vector<double> next_x_vals;
             vector<double> next_y_vals;
-            vector<vector<double>> next_x_vals_vector;
-            vector<vector<double>> next_y_vals_vector;
-            // if no front nearest car, keep lane
-            if (front_nearest_car != -1){
-              // check whether need to keep lane
-              if (front_min_dist < 30){
-                too_close = true;
 
-                // decide keep lane, or lane change left, or lane change right
-                double cost_lk;
-                double cost_lcl;
-                double cost_lcr;
+            double cost_lk;
+            double cost_lcl = 10000;
+            double cost_lcr = 10000;
 
-                // lane keep cost
-                next_vals  = generate_path(too_close, lane, j[1],
-              map_waypoints_x, map_waypoints_y, map_waypoints_s);
+            current_lane = get_current_lane(d);
 
-                next_x_vals = next_vals[0];
-                next_y_vals = next_vals[1];
-                next_x_vals_vector.push_back(next_x_vals);
-                next_y_vals_vector.push_back(next_y_vals);
+            // behavior planner
+            // we perform behavior planning if target_lane equals lane.
+            // if not equal, means we are changing lanes.
+            if(target_lane == lane){
 
-                cost_lk = compute_cost(next_x_vals, next_y_vals);
+              if (front_nearest_car != -1){
+                // if there are front vehicles
 
+                // check whether need to keep lane
+                if (front_min_dist < 30){
+                  // if front vehicle is less than 30m to ego vehicle
+                  too_close = true;
 
-                // lane change left cost
-                if(lane > 0){
-                  // defaultly, give large cost for not able to change lane.
-                  cost_lcl = 100;
+                  // decide keep lane, or lane change left, or lane change right
 
-                  if(1){
-                  next_vals  = generate_path(too_close, lane-1, j[1],
+                  // lane keep cost
+                  next_vals  = generate_path(too_close, lane, j[1],
                 map_waypoints_x, map_waypoints_y, map_waypoints_s);
 
                   next_x_vals = next_vals[0];
                   next_y_vals = next_vals[1];
-                  next_x_vals_vector.push_back(next_x_vals);
-                  next_y_vals_vector.push_back(next_y_vals);
 
-                  cost_lcl = compute_cost(next_x_vals, next_y_vals);
-                }
-                }
 
-                // lane change right cost
-                if(lane < 2){
-                  // defaultly, give large cost for not able to change lane.
-                  cost_lcr = 100;
+                  cost_lk = compute_cost(next_x_vals, next_y_vals);
 
-                  // check free space range
-                  
-                  check_car_s = sensor_fusion[front_nearest_car][5];
-                  if(1){
-                    // if it is able to change lane right, compute it.
-                    next_vals  = generate_path(too_close, lane+1, j[1],
+                  too_close = true; // if change lane, accelerate
+
+                  bool able_to_change;
+                  // lane change left cost
+                  if(lane > 0){
+                    // defaultly, give large cost for not able to change lane.
+                    cost_lcl = 100;
+                    able_to_change = false;
+
+                    if(left_front_nearest_car == -1){
+                      // no front car, able to change
+                      able_to_change = true;
+                    }else{
+
+                    }
+                    if(able_to_change){
+                    next_vals  = generate_path(too_close, lane-1, j[1],
                   map_waypoints_x, map_waypoints_y, map_waypoints_s);
 
                     next_x_vals = next_vals[0];
                     next_y_vals = next_vals[1];
-                    next_x_vals_vector.push_back(next_x_vals);
-                    next_y_vals_vector.push_back(next_y_vals);
 
-                    cost_lcr = compute_cost(next_x_vals, next_y_vals);
+
+                    cost_lcl = compute_cost(next_x_vals, next_y_vals);
+                  }
                   }
 
+                  // lane change right cost
+                  if(lane < 2){
+                    // defaultly, give large cost for not able to change lane.
+                    cost_lcr = 100;
+                    able_to_change = false;
+
+                    if(right_front_nearest_car == -1){
+                      // if there is no front car on right lane
+                      if(right_rear_nearest_car == -1){
+                        able_to_change = true;
+
+                      }else if(right_rear_min_dist > 8){
+                        // if rear car exist, it should leave some space for ego car
+                        able_to_change = true;
+                      }
+                    }else{
+                      // front car exists
+                      if (right_rear_nearest_car != -1 && right_rear_min_dist > 8){
+                          able_to_change = true;
+                        }
+                      else if(right_rear_nearest_car == -1){
+                          able_to_change = true;
+                        }
+                      }
+
+                    }
+
+                    if(able_to_change){
+                      // if it is able to change lane right, compute it.
+                      next_vals  = generate_path(too_close, lane+1, j[1],
+                    map_waypoints_x, map_waypoints_y, map_waypoints_s);
+
+                      next_x_vals = next_vals[0];
+                      next_y_vals = next_vals[1];
+
+                      cost_lcr = compute_cost(next_x_vals, next_y_vals);
+                    }
+
+                    /////// choose the trajectory of minimum cost
+                    double costs [] = {cost_lk, cost_lcl, cost_lcr};
+                    // should have some simple functions to use, but I didn't find
+                    double min_cost = 10000;
+                    int min_cost_idx;
+
+                    if(cost_lcl!=10000 || cost_lcr!=10000){
+                      // if possible to change lane, change lane intead of keep lane
+                      for (int i=1; i < 3; i ++){
+                        if(costs[i] < min_cost){
+                          min_cost_idx = i;
+                          min_cost = costs[i];
+                        }
+                      }
+
+                    }
+
+                    if(min_cost_idx == 1){
+                      target_lane = lane - 1;
+                    }else if(min_cost_idx==2){
+                      target_lane = lane + 1;
+                    }else{
+                      target_lane = lane;
+                    }
+                    cout<<"minimum cost is " << min_cost <<endl;
+                    cout<<"selected lane " << target_lane <<endl;
+
+
+                    ////// end of choosing trajectory of minimum cost
+
+                }
+                else{
+                  // front nearest vehicle is far away, keep lane
+                  too_close = false;
+                  target_lane = lane;
+                }
+              }else{
+                // no front vehicle, keep lane
+                too_close = false;
+                target_lane = lane;
               }
-            }}
-
-
-            double min_cost = std::min(cost_lk, cost_lcl, cost_lcr);
-            if(min_cost == cost_lk){
-              min_cost_idx = 0;
-            }else if(min_cost == cost_lcl){
-              min_cost_idx = 1;
-            }else{
-              min_cost_idx = 2;
             }
 
-            next_x_vals_vector[min_cost_idx];
-            next_y_vals_vector[min_cost_idx];
+            next_vals  = generate_path(too_close, target_lane, j[1],
+              map_waypoints_x, map_waypoints_y, map_waypoints_s);
+            next_x_vals = next_vals[0];
+            next_y_vals = next_vals[1];
 
 
           	msgJson["next_x"] = next_x_vals;
