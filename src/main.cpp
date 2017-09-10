@@ -331,13 +331,13 @@ int get_current_lane(double d){
   // from center line to the most right, lane 1, 2, 3.
   int lane_num;
 
-  if(d < 4 && d > 0){
+  if(d < 4 && d >= 0){
     lane_num = 0;
   }
-  else if(d < 8 && d > 4){
+  else if(d < 8 && d >= 4){
     lane_num = 1;
   }
-  else if(d < 12 && d > 8){
+  else if(d < 12 && d >= 8){
     lane_num = 2;
   }
   return lane_num;
@@ -515,6 +515,10 @@ int main() {
               }
             }
 
+            cout << "left: front "<<left_front_nearest_car << " " <<left_front_min_dist <<endl;
+            cout << "left: rear " << left_rear_nearest_car << " " << left_rear_min_dist << endl;
+            cout << "right: front "<<right_front_nearest_car << " " << right_front_min_dist << endl;
+            cout << "right: rear "<< right_rear_nearest_car << " " << right_rear_min_dist << endl;
             // now we know cars around the ego car
             // if left_front_nearest_car[0] == -1, means left_front_nearest_car not exist
 
@@ -558,15 +562,21 @@ int main() {
                   // lane change left cost
                   if(lane > 0){
                     // defaultly, give large cost for not able to change lane.
-                    cost_lcl = 100;
                     able_to_change = false;
 
-                    if(left_front_nearest_car == -1){
+                    if(left_front_nearest_car == -1 && (left_rear_nearest_car == -1 ||
+                    left_front_min_dist > 10)){
                       // no front car, able to change
                       able_to_change = true;
                     }else{
-
+                      if(left_front_min_dist > 40 && (left_rear_nearest_car == -1 ||
+                      left_front_min_dist > 10)){
+                        // if front nearest car is more than 50m away from me and rear car is 10m
+                        // away from me
+                        able_to_change = true;
+                      }
                     }
+
                     if(able_to_change){
                     next_vals  = generate_path(too_close, lane-1, j[1],
                   map_waypoints_x, map_waypoints_y, map_waypoints_s);
@@ -576,32 +586,21 @@ int main() {
 
 
                     cost_lcl = compute_cost(next_x_vals, next_y_vals);
-                  }
+                    }
                   }
 
                   // lane change right cost
                   if(lane < 2){
                     // defaultly, give large cost for not able to change lane.
-                    cost_lcr = 100;
                     able_to_change = false;
 
-                    if(right_front_nearest_car == -1){
+                    if(right_front_nearest_car == -1 && (right_rear_nearest_car == -1 || right_rear_min_dist > 10)){
                       // if there is no front car on right lane
-                      if(right_rear_nearest_car == -1){
-                        able_to_change = true;
+                      able_to_change = true;
 
-                      }else if(right_rear_min_dist > 8){
+                    }else if(right_front_min_dist > 40 && (right_rear_nearest_car == -1 || right_rear_min_dist > 10)){
                         // if rear car exist, it should leave some space for ego car
                         able_to_change = true;
-                      }
-                    }else{
-                      // front car exists
-                      if (right_rear_nearest_car != -1 && right_rear_min_dist > 8){
-                          able_to_change = true;
-                        }
-                      else if(right_rear_nearest_car == -1){
-                          able_to_change = true;
-                        }
                       }
 
                     }
