@@ -481,7 +481,6 @@ int main() {
               }
               // check my left lane
               else if (d < (4*(lane)) && d > (4*(lane-1))){
-                if(lane == 0){continue;}
 
                 // compute left front nearest car
                 if((dist > 0) && (dist < left_front_min_dist)){
@@ -491,14 +490,13 @@ int main() {
 
                 // compute left rear nearest car
                 if((dist < 0) && (-dist < left_rear_min_dist)){
-                  left_front_min_dist = -dist;
+                  left_rear_min_dist = -dist;
                   left_rear_nearest_car = i;
                 }
 
               }
               // check my right lane
               else if (d < (4*(lane+2)) && d > (4*(lane+1))){
-                if(lane == 2){continue;}
 
                 // compute right front nearest car
                 if((dist > 0) && (dist < right_front_min_dist)){
@@ -508,13 +506,13 @@ int main() {
 
                 // compute left rear nearest car
                 if((dist < 0) && (-dist < right_rear_min_dist)){
-                  right_front_min_dist = -dist;
+                  right_rear_min_dist = -dist;
                   right_rear_nearest_car = i;
                 }
 
               }
             }
-
+            cout << " " << endl;
             cout << "left: front "<<left_front_nearest_car << " " <<left_front_min_dist <<endl;
             cout << "left: rear " << left_rear_nearest_car << " " << left_rear_min_dist << endl;
             cout << "right: front "<<right_front_nearest_car << " " << right_front_min_dist << endl;
@@ -548,7 +546,7 @@ int main() {
 
                   // lane keep cost
                   next_vals  = generate_path(too_close, lane, j[1],
-                map_waypoints_x, map_waypoints_y, map_waypoints_s);
+                    map_waypoints_x, map_waypoints_y, map_waypoints_s);
 
                   next_x_vals = next_vals[0];
                   next_y_vals = next_vals[1];
@@ -556,7 +554,7 @@ int main() {
 
                   cost_lk = compute_cost(next_x_vals, next_y_vals);
 
-                  too_close = true; // if change lane, accelerate
+                  too_close = true;
 
                   bool able_to_change;
                   // lane change left cost
@@ -565,12 +563,12 @@ int main() {
                     able_to_change = false;
 
                     if(left_front_nearest_car == -1 && (left_rear_nearest_car == -1 ||
-                    left_front_min_dist > 10)){
+                    left_rear_min_dist > 20)){
                       // no front car, able to change
                       able_to_change = true;
                     }else{
                       if(left_front_min_dist > 40 && (left_rear_nearest_car == -1 ||
-                      left_front_min_dist > 10)){
+                      left_rear_min_dist > 20)){
                         // if front nearest car is more than 50m away from me and rear car is 10m
                         // away from me
                         able_to_change = true;
@@ -579,7 +577,7 @@ int main() {
 
                     if(able_to_change){
                     next_vals  = generate_path(too_close, lane-1, j[1],
-                  map_waypoints_x, map_waypoints_y, map_waypoints_s);
+                      map_waypoints_x, map_waypoints_y, map_waypoints_s);
 
                     next_x_vals = next_vals[0];
                     next_y_vals = next_vals[1];
@@ -657,6 +655,9 @@ int main() {
                 too_close = false;
                 target_lane = lane;
               }
+            }else{
+              // changing lane
+              too_close = true;
             }
 
             next_vals  = generate_path(too_close, target_lane, j[1],
