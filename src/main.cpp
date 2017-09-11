@@ -231,7 +231,7 @@ vector<vector<double>> generate_path(bool too_close, int lane, json j,
   }
 
   // In Frenet coordinates, add evenly 30m points ahead of the starting reference point
-  vector<double> next_wp0 = getXY(car_s+30, (2+4*lane), map_waypoints_s,map_waypoints_x,map_waypoints_y);
+  vector<double> next_wp0 = getXY(car_s+50, (2+4*lane), map_waypoints_s,map_waypoints_x,map_waypoints_y);
   vector<double> next_wp1 = getXY(car_s+60, (2+4*lane), map_waypoints_s,map_waypoints_x,map_waypoints_y);
   vector<double> next_wp2 = getXY(car_s+90, (2+4*lane), map_waypoints_s,map_waypoints_x,map_waypoints_y);
 
@@ -271,7 +271,7 @@ vector<vector<double>> generate_path(bool too_close, int lane, json j,
 
   // calculate how to break up spline points so that we travel at our
   // desired reference speed
-  double target_x = 30.0;
+  double target_x = 50.0;
   double target_y = s(target_x);
   double target_dist = sqrt(target_x*target_x + target_y*target_y);
 
@@ -321,7 +321,7 @@ double compute_cost(vector<double> next_x_vals, vector<double> next_y_vals){
   }
   // normalize it over all speed 0
   cost = cost / (next_x_vals.size() - 1) / (49.5 / 2.24);
-  cout << cost << endl;
+  // cout << cost << endl;
   return cost;
 }
 
@@ -556,38 +556,39 @@ int main() {
 
                   too_close = true;
 
+
                   bool able_to_change;
-                  // lane change left cost
+                  // lanes 1 and 2, compute change left cost
                   if(lane > 0){
-                    // defaultly, give large cost for not able to change lane.
                     able_to_change = false;
 
                     if(left_front_nearest_car == -1 && (left_rear_nearest_car == -1 ||
                     left_rear_min_dist > 20)){
                       // no front car, able to change
                       able_to_change = true;
-                    }else{
-                      if(left_front_min_dist > 40 && (left_rear_nearest_car == -1 ||
+
+                    }else if((left_front_nearest_car != -1 && left_front_min_dist > 40) && (left_rear_nearest_car == -1 ||
                       left_rear_min_dist > 20)){
                         // if front nearest car is more than 50m away from me and rear car is 10m
                         // away from me
                         able_to_change = true;
-                      }
+
                     }
 
                     if(able_to_change){
-                    next_vals  = generate_path(too_close, lane-1, j[1],
-                      map_waypoints_x, map_waypoints_y, map_waypoints_s);
+                      next_vals  = generate_path(too_close, lane-1, j[1],
+                        map_waypoints_x, map_waypoints_y, map_waypoints_s);
 
-                    next_x_vals = next_vals[0];
-                    next_y_vals = next_vals[1];
+                      next_x_vals = next_vals[0];
+                      next_y_vals = next_vals[1];
 
-
-                    cost_lcl = compute_cost(next_x_vals, next_y_vals);
+                      cost_lcl = compute_cost(next_x_vals, next_y_vals);
                     }
+                  // end of lane change left cost computation
                   }
 
-                  // lane change right cost
+
+                  // lanes 0 and 1, compute change right cost
                   if(lane < 2){
                     // defaultly, give large cost for not able to change lane.
                     able_to_change = false;
@@ -596,12 +597,11 @@ int main() {
                       // if there is no front car on right lane
                       able_to_change = true;
 
-                    }else if(right_front_min_dist > 40 && (right_rear_nearest_car == -1 || right_rear_min_dist > 10)){
+                    }else if((right_front_nearest_car != -1 && right_front_min_dist > 40) && (right_rear_nearest_car == -1 || right_rear_min_dist > 10)){
                         // if rear car exist, it should leave some space for ego car
                         able_to_change = true;
-                      }
-
                     }
+
 
                     if(able_to_change){
                       // if it is able to change lane right, compute it.
@@ -613,33 +613,40 @@ int main() {
 
                       cost_lcr = compute_cost(next_x_vals, next_y_vals);
                     }
+                  // end of lane change right cost computation
+                  }
 
-                    /////// choose the trajectory of minimum cost
-                    double costs [] = {cost_lk, cost_lcl, cost_lcr};
-                    // should have some simple functions to use, but I didn't find
-                    double min_cost = 10000;
-                    int min_cost_idx;
 
-                    if(cost_lcl!=10000 || cost_lcr!=10000){
-                      // if possible to change lane, change lane intead of keep lane
-                      for (int i=1; i < 3; i ++){
-                        if(costs[i] < min_cost){
-                          min_cost_idx = i;
-                          min_cost = costs[i];
-                        }
-                      }
+                  /////// choose the trajectory of minimum cost
+                  // double costs [] = {cost_lk, cost_lcl, cost_lcr};
+                  // should have some simple functions to use, but I didn't find
+                  double min_cost = 1000;
+                  int min_cost_idx;
 
-                    }
+                  if(cost_lcl == 10000 && cost_lcr == 10000){
+                    // both change left and right are not possible
+                    target_lane = lane;
+                  }else{
+                    double costs [] = {cost_lcl, cost_lcr};
+                    min_cost = std::min(cost_lcl, cost_lcr);
+                    // cout<< "costs: "<<cost_lcl << "  "<<cost_lcr<< "  cost min" << min_cost <<endl;
 
-                    if(min_cost_idx == 1){
+                    if(min_cost == cost_lcl){
                       target_lane = lane - 1;
-                    }else if(min_cost_idx==2){
-                      target_lane = lane + 1;
                     }else{
-                      target_lane = lane;
+                      target_lane = lane + 1;
                     }
-                    cout<<"minimum cost is " << min_cost <<endl;
-                    cout<<"selected lane " << target_lane <<endl;
+                  }
+
+                  // if(min_cost_idx == 1){
+                  //   target_lane = lane - 1;
+                  // }else if(min_cost_idx==2){
+                  //   target_lane = lane + 1;
+                  // }else{
+                  //   target_lane = lane;
+                  // }
+                  cout<<"               minimum cost is " << min_cost <<endl;
+                  cout<<"               selected lane " << target_lane <<endl;
 
 
                     ////// end of choosing trajectory of minimum cost
@@ -655,9 +662,18 @@ int main() {
                 too_close = false;
                 target_lane = lane;
               }
+
+
             }else{
               // changing lane
               too_close = true;
+            }
+
+            // correct weird behavior of left changing lane on lane 0
+            if(target_lane < 0){
+              target_lane = 0;
+            }else if(target_lane > 2){
+              target_lane = 2;
             }
 
             next_vals  = generate_path(too_close, target_lane, j[1],
