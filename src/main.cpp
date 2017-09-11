@@ -183,7 +183,8 @@ vector<vector<double>> generate_path(bool too_close, int lane, json j,
 
   // could be more efficient to change velocity in path planner.
   if(too_close){
-    ref_vel -= .224; // decrease about 5m/s/s
+    // ref_vel -= .224;
+    ref_vel -= .184;
 
   }else if(ref_vel < 49.5){
     ref_vel += .224;
@@ -563,12 +564,12 @@ int main() {
                     able_to_change = false;
 
                     if(left_front_nearest_car == -1 && (left_rear_nearest_car == -1 ||
-                    left_rear_min_dist > 20)){
+                    left_rear_min_dist > 10)){
                       // no front car, able to change
                       able_to_change = true;
 
                     }else if((left_front_nearest_car != -1 && left_front_min_dist > 40) && (left_rear_nearest_car == -1 ||
-                      left_rear_min_dist > 20)){
+                      left_rear_min_dist > 10)){
                         // if front nearest car is more than 50m away from me and rear car is 10m
                         // away from me
                         able_to_change = true;
@@ -597,7 +598,8 @@ int main() {
                       // if there is no front car on right lane
                       able_to_change = true;
 
-                    }else if((right_front_nearest_car != -1 && right_front_min_dist > 40) && (right_rear_nearest_car == -1 || right_rear_min_dist > 10)){
+                    }else if((right_front_nearest_car != -1 && right_front_min_dist > 40)
+                              && (right_rear_nearest_car == -1 || right_rear_min_dist > 10)){
                         // if rear car exist, it should leave some space for ego car
                         able_to_change = true;
                     }
