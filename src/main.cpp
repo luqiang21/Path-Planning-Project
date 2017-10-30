@@ -166,7 +166,7 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 double ref_vel = 0.;//49.5; // mph
 
 
-vector<vector<double>> generate_path(bool too_close, int lane, json j,
+vector<vector<double>> generate_path(bool too_close, int front_nearest_car, int lane, json j,
   vector<double> map_waypoints_x,  vector<double> map_waypoints_y,
   vector<double> map_waypoints_s){
 
@@ -181,10 +181,29 @@ vector<vector<double>> generate_path(bool too_close, int lane, json j,
 
   int prev_size = previous_path_x.size();
 
+  double front_nearest_car_speed = 0;
+
+  if(front_nearest_car != -1){
+    vector<double> front_nearest_car_data = j["sensor_fusion"][front_nearest_car];
+    double vx = front_nearest_car_data[3];
+    double vy = front_nearest_car_data[4];
+    front_nearest_car_speed = sqrt(vx*vx + vy*vy);
+  }
+
+
   // could be more efficient to change velocity in path planner.
   if(too_close){
     // ref_vel -= .224;
-    ref_vel -= .184;
+    // ref_vel -= .184;
+    // decelerate to the speed of the nearest front car
+    if(ref_vel > front_nearest_car_speed){
+      ref_vel -= .224;
+      cout<<"decelerate to front car's speed."<<endl;
+    }else{
+      if(front_nearest_car_speed <= 49.5){
+        ref_vel = front_nearest_car_speed;
+      }
+    }
 
   }else if(ref_vel < 49.5){
     ref_vel += .224;
@@ -428,14 +447,9 @@ int main() {
           	json msgJson;
 
 
-
+            ///************* Begin of student code **************///
             int prev_size = previous_path_x.size();
 
-            // sensor Fusion
-            // data in sensor_fusion [car's unique ID, car's x position in map coordinates,
-            // car's y position in map coordinates, car's x velocity in m/s,
-            // car's y velocity in m/s, car's s position in frenet coordinates,
-            // car's d position in frenet coordinates] i.e. [id, x, y, vx, vy, s, d]
             if(prev_size > 0){
               car_s = end_path_s;
             }
@@ -460,6 +474,12 @@ int main() {
             float right_front_min_dist = 10000;
             float right_rear_min_dist = 10000;
 
+            // sensor Fusion
+            // data in sensor_fusion [car's unique ID, car's x position in map coordinates,
+            // car's y position in map coordinates, car's x velocity in m/s,
+            // car's y velocity in m/s, car's s position in frenet coordinates,
+            // car's d position in frenet coordinates] i.e. [id, x, y, vx, vy, s, d]
+
             for(int i = 0; i < sensor_fusion.size(); i ++){
               vector<double> car_i_data = sensor_fusion[i];
               float d = car_i_data[6];
@@ -471,7 +491,8 @@ int main() {
               // if using previous value can project s value out
               check_car_s += ((double)prev_size*.02*check_speed);
 
-              double dist = check_car_s - car_s;
+              double dist = check_car_s - car_s; // projected distance
+
               // check my lane
               if (d < (4*(lane+1)) && d > (4*(lane))){
 
@@ -480,6 +501,7 @@ int main() {
                   front_nearest_car = i;
                 }
               }
+
               // check my left lane
               else if (d < (4*(lane)) && d > (4*(lane-1))){
 
@@ -494,8 +516,8 @@ int main() {
                   left_rear_min_dist = -dist;
                   left_rear_nearest_car = i;
                 }
-
               }
+
               // check my right lane
               else if (d < (4*(lane+2)) && d > (4*(lane+1))){
 
@@ -513,11 +535,12 @@ int main() {
 
               }
             }
+
             cout << " " << endl;
-            cout << "left: front "<<left_front_nearest_car << " " <<left_front_min_dist <<endl;
-            cout << "left: rear " << left_rear_nearest_car << " " << left_rear_min_dist << endl;
-            cout << "right: front "<<right_front_nearest_car << " " << right_front_min_dist << endl;
-            cout << "right: rear "<< right_rear_nearest_car << " " << right_rear_min_dist << endl;
+            cout << "left: front "<<left_front_nearest_car << " " <<round(left_front_min_dist) << " m"<<endl;
+            cout << "left: rear " << left_rear_nearest_car << " " << round(left_rear_min_dist) << " m"<<endl;
+            cout << "right: front "<<right_front_nearest_car << " " << round(right_front_min_dist) <<" m"<< endl;
+            cout << "right: rear "<< right_rear_nearest_car << " " << round(right_rear_min_dist) <<" m"<< endl;
             // now we know cars around the ego car
             // if left_front_nearest_car[0] == -1, means left_front_nearest_car not exist
 
@@ -546,7 +569,7 @@ int main() {
                   // decide keep lane, or lane change left, or lane change right
 
                   // lane keep cost
-                  next_vals  = generate_path(too_close, lane, j[1],
+                  next_vals  = generate_path(too_close, front_nearest_car, lane, j[1],
                     map_waypoints_x, map_waypoints_y, map_waypoints_s);
 
                   next_x_vals = next_vals[0];
@@ -577,7 +600,7 @@ int main() {
                     }
 
                     if(able_to_change){
-                      next_vals  = generate_path(too_close, lane-1, j[1],
+                      next_vals  = generate_path(too_close, front_nearest_car, lane-1, j[1],
                         map_waypoints_x, map_waypoints_y, map_waypoints_s);
 
                       next_x_vals = next_vals[0];
@@ -607,7 +630,7 @@ int main() {
 
                     if(able_to_change){
                       // if it is able to change lane right, compute it.
-                      next_vals  = generate_path(too_close, lane+1, j[1],
+                      next_vals  = generate_path(too_close, front_nearest_car, lane+1, j[1],
                     map_waypoints_x, map_waypoints_y, map_waypoints_s);
 
                       next_x_vals = next_vals[0];
@@ -678,10 +701,13 @@ int main() {
               target_lane = 2;
             }
 
-            next_vals  = generate_path(too_close, target_lane, j[1],
+            next_vals  = generate_path(too_close, front_nearest_car, target_lane, j[1],
               map_waypoints_x, map_waypoints_y, map_waypoints_s);
             next_x_vals = next_vals[0];
             next_y_vals = next_vals[1];
+
+            ///************* End of student code **************///
+
 
 
           	msgJson["next_x"] = next_x_vals;
