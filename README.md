@@ -15,10 +15,11 @@ and three points of $$car\_s+30, car\_s+60, car\_s+90$$, the smooth path is gene
 the spline function. <br /> <br />
 
 When the distance between the ego vehicle to the front vehicle is greater than $$30$$ m, lane keep behavior is followed.
-Otherwise, the ego vehicle can change to left lane if it is more than $$40m$$ away from the nearest
-front vehicle and more than $$20m$$ away from the nearest rear vehicle on left lane. If any of the
+Otherwise, the ego vehicle can change to left/right lane if it is more than $$40m$$ away from the nearest
+front vehicle and more than $$10m$$ away from the nearest rear vehicle on left/right lane. If any of the
 conditions are not met, the ego vehicle cannot perform a lane change. Then based on the possible behaviors,
-I compute the cost of each behavior and select the behavior with the minimum cost.
+I compute the cost of each behavior and select the behavior with the minimum cost. If a lane change cannot be performed, the
+ego vehicle follows the leading vehicle's speed.
 
 The cost currently is computed based on speed_limit.
 
